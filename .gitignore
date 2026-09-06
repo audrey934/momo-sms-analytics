@@ -1,0 +1,7 @@
+data/raw/*
+!data/raw/.gitkeep
+data/db.sqlite3
+data/logs/*.log
+.env
+__pycache__/
+*.pyc
