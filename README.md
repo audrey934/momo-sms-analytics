@@ -16,6 +16,7 @@ momo-sms-analytics/
 ├── etl/            # Code that reads, cleans, and saves the data
 ├── scripts/        # Shortcuts to run the project
 ├── tests/          # Code that checks everything works
+├── Docs/           #  Architecture diagram image
 ```
 ## How the system works (system architecture design)
 
