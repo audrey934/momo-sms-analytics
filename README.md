@@ -4,5 +4,5 @@ This project reads MoMo mobile money SMS messages (in XML format), cleans up the
 
 ## Team members:
 - Yera Victoire Promise
-- Ikuzwe Anny Benitha
+- Akuzwe Anny Benitha
 - Audrey Hategekimana
