@@ -22,7 +22,5 @@ momo-sms-analytics/
 
 ![Architecture diagram](docs/architecture.png)
 
-Link to diagram here: [draw.io share link]
-
 ## Team task board
-Tasks tracking: 
+Tasks tracking: https://trello.com/invite/b/6a9dc1374f7c721003ac5fca/ATTI026324660959581bdfa932faec7f602003B77A8B/momo-transaction-processing
