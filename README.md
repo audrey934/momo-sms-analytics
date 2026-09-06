@@ -17,9 +17,9 @@ momo-sms-analytics/
 ├── scripts/        # Shortcuts to run the project
 ├── tests/          # Code that checks everything works
 ```
-## How the system works (architecture)
+## How the system works (system architecture design)
 
-![Architecture diagram](docs/architecture.png)
+https://miro.com/app/board/uXjVHqG8peU=/?share_link_id=510117113913
 
 ## Team task board
 Tasks tracking: https://trello.com/b/6a9dc1374f7c721003ac5fca/ATTI026324660959581bdfa932faec7f602003B77A8B/momo-transaction-processing
