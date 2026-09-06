@@ -9,6 +9,7 @@ This project reads MoMo mobile money SMS messages (in XML format), cleans up the
 
 ## Project folders
 
+```
 momo-sms-analytics/
 ├── web/            # The dashboard (what you see in the browser)
 ├── data/           # Raw messages, cleaned data, and logs
@@ -16,7 +17,7 @@ momo-sms-analytics/
 ├── scripts/        # Shortcuts to run the project
 ├── tests/          # Code that checks everything works
 └── docs/           # The architecture diagram
-
+```
 ## How the system works (architecture)
 
 ![Architecture diagram](docs/architecture.png)
