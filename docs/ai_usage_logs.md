@@ -100,7 +100,17 @@ This was used when reviewing whether the additional `idx_part_tx` index was nece
 
 ---
 
-## 5. Verification of AI-Supplied Information
+## 5. Editing the ai_usage_log.md structure
+
+AI was used to come up with the most presentable format for the information in ai_usage_log.md
+
+## 6. rules_test.sql
+
+AI was used to draft the invalid statements in database/rule_tests.sql. Each one deliberately breaks a rule so we could confirm the database refuses it.
+
+We ran them individually to see the errors.  
+
+## 7. Verification of AI-Supplied Information
 
 AI responses were treated as supporting information rather than authoritative project decisions.
 
@@ -109,11 +119,6 @@ Where AI provided information about syntax, errors, documentation, or MySQL beha
 For example, an AI-supplied reference to specific file/line numbers did not match the actual project files. The team checked the files directly and corrected the references.
 
 All implemented database code was run and tested in MySQL 8.0 before being committed.
-
-
-## 6. Editing the ai_usage_log.md structure
-
-AI was used to come up with the most presentable format for the information in ai_usage_log.md
 
 ---
 
