@@ -529,4 +529,13 @@ FROM (
 WHERE rn = 1
 ORDER BY amount DESC;
 
+SELECT process_stage, log_level, COUNT(*) AS entries
+FROM System_Logs
+GROUP BY process_stage, log_level
+ORDER BY FIELD(log_level,'ERROR','WARNING','INFO'), process_stage;
 
+SELECT transaction_id, category_name, amount,
+       sender_name, sender_phone_masked, receiver_name, receiver_phone_masked
+FROM v_transactions_masked
+ORDER BY amount DESC
+LIMIT 5;
