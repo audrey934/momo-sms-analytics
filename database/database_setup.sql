@@ -488,3 +488,78 @@ FROM Transactions t
 WHERE t.status = 'COMPLETED'
 GROUP BY month, c.category_name, c.category_type, c.direction;
 
+-- RULE 9 — Two accounts, each with the narrowest useful grant (SECURITY)
+
+DROP USER IF EXISTS 'momo_etl'@'localhost';
+CREATE USER 'momo_etl'@'localhost' IDENTIFIED BY 'CHANGE_ME_IN_ENV';
+GRANT SELECT, INSERT, UPDATE ON momo_sms_db.* TO 'momo_etl'@'localhost';
+
+DROP USER IF EXISTS 'momo_dashboard'@'localhost';
+CREATE USER 'momo_dashboard'@'localhost' IDENTIFIED BY 'CHANGE_ME_IN_ENV';
+GRANT SELECT ON momo_sms_db.v_transactions_masked TO 'momo_dashboard'@'localhost';
+GRANT SELECT ON momo_sms_db.v_monthly_summary     TO 'momo_dashboard'@'localhost';
+
+FLUSH PRIVILEGES;
+
+
+-- SECTION 8: CRUD OPERATIONS AND RULE TESTS
+--CRUD
+SELECT '===== A1. CREATE — add a merchant and a transaction =====' AS test;
+
+INSERT INTO Users (full_name, phone_number, user_type)
+VALUES ('Kigali Heights Pharmacy', '250788400123', 'MERCHANT');
+SET @new_user := LAST_INSERT_ID();
+
+INSERT INTO Transactions
+    (financial_transaction_id, category_id, amount, fee, balance_after,
+     transaction_datetime, status, raw_sms_body)
+VALUES
+    ('99001122334',
+     (SELECT category_id FROM Transaction_Categories WHERE category_name='Merchant Payment'),
+     7500.00, 0.00, 12500.00, '2025-01-14 10:02:33', 'COMPLETED',
+     'TxId: 99001122334. Your payment of 7,500 RWF to Kigali Heights Pharmacy 41234 has been completed at 2025-01-14 10:02:33. Your new balance: 12500 RWF. Fee was 0 RWF.');
+SET @new_tx := LAST_INSERT_ID();
+
+INSERT INTO Transaction_Participants (transaction_id, user_id, role) VALUES
+    (@new_tx, (SELECT user_id FROM Users WHERE user_type='SELF'), 'SENDER'),
+    (@new_tx, @new_user, 'MERCHANT');
+
+SELECT @new_tx AS created_transaction_id, @new_user AS created_user_id;
+SELECT transaction_id, financial_transaction_id, amount, status
+FROM Transactions WHERE transaction_id = @new_tx;
+
+
+SELECT '===== A2. READ — complete transaction with all participants =====' AS test;
+
+SELECT t.financial_transaction_id, t.amount, t.fee, t.transaction_datetime,
+       c.category_name, c.direction,
+       GROUP_CONCAT(CONCAT(u.full_name,' (',p.role,')') ORDER BY p.role SEPARATOR ' | ') AS parties
+FROM Transactions t
+JOIN Transaction_Categories   c ON c.category_id = t.category_id
+JOIN Transaction_Participants p ON p.transaction_id = t.transaction_id
+JOIN Users                    u ON u.user_id = p.user_id
+WHERE t.transaction_id = @new_tx
+GROUP BY t.transaction_id;
+
+
+SELECT '===== A3. UPDATE — correct the amount, audit row appears by itself =====' AS test;
+
+UPDATE Transactions SET amount = 8000.00 WHERE transaction_id = @new_tx;
+
+SELECT transaction_id, amount FROM Transactions WHERE transaction_id = @new_tx;
+
+SELECT '-- written automatically by RULE 5, nothing in the UPDATE asked for it --' AS note;
+SELECT log_id, transaction_id, process_stage, log_level, message
+FROM System_Logs WHERE transaction_id = @new_tx AND process_stage = 'AUDIT';
+
+
+SELECT '===== A4. DELETE — remove the test rows =====' AS test;
+
+-- RULE 4 refuses to delete a COMPLETED transaction, so reverse it first.
+UPDATE Transactions SET status = 'REVERSED' WHERE transaction_id = @new_tx;
+DELETE FROM Transactions WHERE transaction_id = @new_tx;   -- participants cascade
+DELETE FROM Users        WHERE user_id = @new_user;
+
+SELECT COUNT(*) AS transactions_left FROM Transactions        WHERE transaction_id = @new_tx;
+SELECT COUNT(*) AS participants_left FROM Transaction_Participants WHERE transaction_id = @new_tx;
+
