@@ -470,3 +470,21 @@ FROM Transactions t
     LEFT JOIN Transaction_Participants pr
            ON pr.transaction_id = t.transaction_id AND pr.role IN ('RECEIVER','AGENT','MERCHANT')
     LEFT JOIN Users r ON r.user_id = pr.user_id;
+
+-- RULE 8 — Aggregation happens in MySQL, not in the browser
+
+CREATE OR REPLACE VIEW v_monthly_summary AS
+SELECT
+    DATE_FORMAT(t.transaction_datetime, '%Y-%m') AS month,
+    c.category_name,
+    c.category_type,
+    c.direction,
+    COUNT(*)                AS transaction_count,
+    SUM(t.amount)           AS total_amount,
+    ROUND(AVG(t.amount), 2) AS average_amount,
+    SUM(t.fee)              AS total_fees
+FROM Transactions t
+    JOIN Transaction_Categories c ON c.category_id = t.category_id
+WHERE t.status = 'COMPLETED'
+GROUP BY month, c.category_name, c.category_type, c.direction;
+
