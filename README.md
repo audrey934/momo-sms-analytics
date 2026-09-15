@@ -19,21 +19,21 @@ momo-sms-analytics/
 ├── tests/          # Code that checks everything works
 ├── docs/           #  Architecture diagram image
 ```
+### ERD:https://lucid.app/lucidchart/e596d4dc-5529-40dc-b395-deef53890519/edit?invitationId=inv_7e82cc2f-9efa-4e12-8246-7cb707400d4e
 ### ERD Design Documentation
 
-The Entity Relationship Diagram (ERD) was designed to represent the main entities and relationships required for an Airbnb-style booking system. The database is divided into separate tables to reduce data duplication and make the system easier to maintain.
+The Entity Relationship Diagram (ERD) was designed to provide a structured database for storing, processing, and analyzing MoMo SMS transaction data. The design separates transaction information from user, category, participant, and system logging information so that each type of data can be managed independently while still maintaining relationships between related records.
 
-The *User*entity stores information about users of the system, while the **Property** entity stores information about properties available for booking. A user can own or manage multiple properties, so there is a one-to-many relationship between users and properties. The **Booking** entity connects users with properties and records important information such as check-in date, check-out date, total price, and booking status. This allows one user to make multiple bookings and one property to receive multiple bookings over time.
+The **Users** entity stores information about customers or parties involved in mobile money transactions. The **Transactions** entity represents the main transaction records and contains information such as transaction identifiers, dates, amounts, and references to the relevant category and users. **Transaction_Categories** stores different types of transactions, allowing transactions to be classified consistently without repeatedly storing category descriptions. **System_Logs** records processing or system activities, which supports monitoring and troubleshooting of the data processing system.
 
-The *Review* entity is connected to both users and properties. This allows users to leave reviews for properties they have booked while keeping review information separate from the main user and property data. The **Payment** entity is linked to bookings so that payment information can be stored separately from booking details.
+Primary keys are used to uniquely identify records in each entity, while foreign keys connect related entities and help maintain referential integrity. The relationship between transactions and participants is handled through the **Transaction_Participants** junction table. This resolves the many-to-many relationship because a transaction can involve multiple participants, while a user or party can participate in multiple transactions.
 
-The *Amenity* entity stores reusable amenities such as Wi-Fi, parking, or a swimming pool. Because a property can have many amenities and an amenity can belong to many properties, the **Property_Amenity** junction table is used to implement this many-to-many relationship.
+The design also supports data accuracy through constraints such as primary keys, foreign keys, required fields, and appropriate data types. Separating the information into related tables reduces data duplication and makes the database easier to query and maintain. The structure can also be extended in the future as additional transaction categories, users, or transaction types are introduced.
 
-Primary keys uniquely identify each record, while foreign keys establish relationships between entities. This structure improves data integrity, reduces redundancy, and makes the database scalable and easier to query.
 
-## How the system works (system architecture design)
 
-https://lucid.app/lucidchart/e596d4dc-5529-40dc-b395-deef53890519/edit?invitationId=inv_7e82cc2f-9efa-4e12-8246-7cb707400d4e
+
+
 
 
 Tasks tracking: https://trello.com/b/6a9dc1374f7c721003ac5fca/ATTI026324660959581bdfa932faec7f602003B77A8B/momo-transaction-processing
