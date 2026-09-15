@@ -468,5 +468,26 @@ DELETE FROM Users        WHERE user_id = @new_user;
 SELECT COUNT(*) AS transactions_left FROM Transactions        WHERE transaction_id = @new_tx;
 SELECT COUNT(*) AS participants_left FROM Transaction_Participants WHERE transaction_id = @new_tx;
 
+SELECT c.category_name, c.category_type, c.direction,
+       COUNT(*)                AS txn_count,
+       SUM(t.amount)           AS total_amount,
+       ROUND(AVG(t.amount), 2) AS avg_amount,
+       SUM(t.fee)              AS total_fees,
+       ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM Transactions), 1) AS pct_of_volume
+FROM Transactions t
+JOIN Transaction_Categories c ON c.category_id = t.category_id
+GROUP BY c.category_id
+ORDER BY total_amount DESC;
+
+SELECT DATE_FORMAT(t.transaction_datetime, '%Y-%m') AS month,
+       SUM(CASE WHEN c.direction='CREDIT' THEN t.amount ELSE 0 END)       AS money_in,
+       SUM(CASE WHEN c.direction='DEBIT'  THEN t.amount ELSE 0 END)       AS money_out,
+       SUM(CASE WHEN c.direction='CREDIT' THEN t.amount ELSE -t.amount END) AS net_flow,
+       COUNT(*)                                                           AS txn_count
+FROM Transactions t
+JOIN Transaction_Categories c ON c.category_id = t.category_id
+WHERE t.status = 'COMPLETED'
+GROUP BY month
+ORDER BY month;
 
 
