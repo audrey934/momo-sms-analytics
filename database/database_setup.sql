@@ -401,3 +401,42 @@ BEGIN
             SET MESSAGE_TEXT = 'Rejected: completed transactions are append-only; set status = REVERSED instead';
     END IF;
 END $$
+
+
+-- RULE 5 — Every change to money writes its own audit row     
+DROP TRIGGER IF EXISTS trg_tx_audit_au $$
+CREATE TRIGGER trg_tx_audit_au
+AFTER UPDATE ON Transactions
+FOR EACH ROW
+BEGIN
+    IF OLD.amount <> NEW.amount
+       OR OLD.fee <> NEW.fee
+       OR OLD.status <> NEW.status THEN
+
+        INSERT INTO System_Logs (transaction_id, process_stage, log_level, message)
+        VALUES (
+            NEW.transaction_id,
+            'AUDIT',
+            'WARNING',
+            CONCAT('Modified by ', CURRENT_USER(),
+                   ' | amount ', OLD.amount,  ' -> ', NEW.amount,
+                   ' | fee ',    OLD.fee,     ' -> ', NEW.fee,
+                   ' | status ', OLD.status,  ' -> ', NEW.status)
+        );
+    END IF;
+END $$
+
+
+-- RULE 6 — The raw SMS text cannot be edited          
+DROP TRIGGER IF EXISTS trg_tx_body_immutable_bu $$
+CREATE TRIGGER trg_tx_body_immutable_bu
+BEFORE UPDATE ON Transactions
+FOR EACH ROW
+BEGIN
+    IF OLD.raw_sms_body <> NEW.raw_sms_body THEN
+        SIGNAL SQLSTATE '45005'
+            SET MESSAGE_TEXT = 'Rejected: raw_sms_body is immutable; it is the audit source for every parsed value';
+    END IF;
+END $$
+
+DELIMITER ;
