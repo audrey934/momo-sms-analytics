@@ -509,4 +509,24 @@ GROUP BY u.user_id
 ORDER BY total_value DESC
 LIMIT 10;
 
+SELECT c.category_type,
+       COUNT(*)      AS txn_count,
+       SUM(t.amount) AS total_amount,
+       SUM(t.fee)    AS fees_paid,
+       ROUND(100.0 * SUM(t.fee) / NULLIF(SUM(t.amount),0), 3) AS fee_pct_of_value
+FROM Transactions t
+JOIN Transaction_Categories c ON c.category_id = t.category_id
+GROUP BY c.category_type
+ORDER BY total_amount DESC;
+
+SELECT category_name, financial_transaction_id, amount, transaction_datetime
+FROM (
+    SELECT c.category_name, t.financial_transaction_id, t.amount, t.transaction_datetime,
+           ROW_NUMBER() OVER (PARTITION BY c.category_id ORDER BY t.amount DESC) AS rn
+    FROM Transactions t
+    JOIN Transaction_Categories c ON c.category_id = t.category_id
+) ranked
+WHERE rn = 1
+ORDER BY amount DESC;
+
 
