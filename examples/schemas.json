@@ -1,0 +1,479 @@
+{
+  "_meta": {
+    "file": "examples/json_schemas.json",
+    "project": "MoMo SMS Data Processing System",
+    "team": "Team Kigali Data Lab",
+    "authors": "Audrey Hategekimana (schemas, mapping, serialisation notes) with review from Akuzwe Anny Benitha (sample values checked against the SMS export)",
+    "purpose": "JSON representations of the database entities, showing how relational rows are serialised for API responses.",
+    "source_of_values": "All sample values are copied from data/raw/modified_sms_v2.xml or from the rows inserted by database/02_seed_data.sql. Nothing here is invented."
+  },
+
+  "json_schemas": {
+    "_note": "Draft-07 schemas for each entity. These are the contract: every enum list below matches the SQL ENUM exactly, so a payload the API rejects is a payload MySQL would also have rejected. The entity_examples further down are all validated against these.",
+
+    "category": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Category",
+      "type": "object",
+      "required": ["id", "name", "type", "direction"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string", "minLength": 3, "maxLength": 50 },
+        "type": { "type": "string", "enum": ["TRANSFER", "PAYMENT", "DEPOSIT", "WITHDRAWAL", "AIRTIME", "REVERSAL", "SYSTEM"] },
+        "direction": { "type": "string", "enum": ["CREDIT", "DEBIT", "NEUTRAL"] },
+        "description": { "type": ["string", "null"], "maxLength": 255 }
+      }
+    },
+
+    "user": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "required": ["id", "full_name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "full_name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "phone_number": {
+          "type": ["string", "null"],
+          "pattern": "^(250[0-9]{9}|\\*+[0-9]{3})$",
+          "description": "Either a full MSISDN or the masked form the SMS supplied. Internal endpoints only — public responses carry phone_masked instead."
+        },
+        "phone_masked": { "type": ["string", "null"], "pattern": "^\\*{5}[0-9]{3}$" },
+        "type": { "type": "string", "enum": ["SELF", "CUSTOMER", "AGENT", "MERCHANT", "BANK"] },
+        "created_at": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+
+    "participant": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Participant",
+      "description": "One row of Transaction_Participants after the junction has been flattened. participant_id is dropped and user_id is replaced by the user object.",
+      "type": "object",
+      "required": ["role", "user"],
+      "additionalProperties": false,
+      "properties": {
+        "role": { "type": "string", "enum": ["SENDER", "RECEIVER", "AGENT", "MERCHANT"] },
+        "user": { "$ref": "#/json_schemas/user" }
+      }
+    },
+
+    "transaction": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Transaction",
+      "type": "object",
+      "required": ["transaction_id", "amount", "currency", "transaction_datetime", "status", "category"],
+      "additionalProperties": false,
+      "properties": {
+        "transaction_id": { "type": "integer", "minimum": 1 },
+        "financial_transaction_id": { "type": ["string", "null"], "maxLength": 30 },
+        "external_transaction_id": { "type": ["string", "null"], "maxLength": 30 },
+        "amount": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+        "fee": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+        "balance_after": { "type": ["string", "null"], "pattern": "^\\d+\\.\\d{2}$" },
+        "currency": { "type": "string", "enum": ["RWF", "USD", "EUR", "KES", "UGX"] },
+        "transaction_datetime": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["COMPLETED", "PENDING", "FAILED", "REVERSED"] },
+        "raw_sms_body": { "type": ["string", "null"], "description": "Detail endpoint only. Holds names, account numbers and balances, so list responses drop it." },
+        "category": { "$ref": "#/json_schemas/category" },
+        "participants": { "type": "array", "items": { "$ref": "#/json_schemas/participant" }, "minItems": 1 },
+        "processing_logs": { "type": "array", "items": { "$ref": "#/json_schemas/log_entry" } }
+      }
+    },
+
+    "log_entry": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "LogEntry",
+      "type": "object",
+      "required": ["id", "stage", "level", "message", "created_at"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "transaction_id": { "type": ["integer", "null"] },
+        "stage": { "type": "string", "enum": ["PARSE", "CLEAN", "CATEGORIZE", "LOAD", "EXPORT", "API", "AUDIT"] },
+        "level": { "type": "string", "enum": ["INFO", "WARNING", "ERROR"] },
+        "message": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+
+  "sql_to_json_mapping": {
+    "_note": "Column-by-column mapping between the MySQL schema and its JSON form. Junction tables do not appear as top-level objects: the relationship they carry is expressed in JSON by nesting instead.",
+
+    "Transaction_Categories": {
+      "json_object": "category",
+      "columns": {
+        "category_id": "id (integer)",
+        "category_name": "name (string)",
+        "category_type": "type (string, from ENUM)",
+        "direction": "direction (string, from ENUM)",
+        "description": "description (string or null)"
+      }
+    },
+
+    "Users": {
+      "json_object": "user",
+      "columns": {
+        "user_id": "id (integer)",
+        "full_name": "full_name (string)",
+        "phone_number": "phone_number on internal endpoints; replaced by phone_masked on public ones, matching the v_transactions_masked view",
+        "user_type": "type (string, from ENUM)",
+        "created_at": "created_at (string, ISO 8601)"
+      }
+    },
+
+    "Transactions": {
+      "json_object": "transaction",
+      "columns": {
+        "transaction_id": "transaction_id (integer)",
+        "financial_transaction_id": "financial_transaction_id (string or null — null on 52% of messages)",
+        "external_transaction_id": "external_transaction_id (string or null)",
+        "category_id": "replaced by the embedded category object",
+        "amount": "amount (string, two decimal places)",
+        "fee": "fee (string, two decimal places)",
+        "currency": "currency (string, ISO 4217)",
+        "balance_after": "balance_after (string or null)",
+        "transaction_datetime": "transaction_datetime (string, ISO 8601)",
+        "status": "status (string, from ENUM)",
+        "raw_sms_body": "raw_sms_body (string, detail view only)"
+      }
+    },
+
+    "Transaction_Participants": {
+      "json_object": "none, flattened into the participants array of a transaction",
+      "columns": {
+        "participant_id": "omitted, it is an internal surrogate key with no API meaning",
+        "transaction_id": "implied by position inside the parent transaction",
+        "user_id": "replaced by the embedded user object",
+        "role": "role (string, from ENUM)"
+      }
+    },
+
+    "System_Logs": {
+      "json_object": "log_entry",
+      "columns": {
+        "log_id": "id (integer)",
+        "transaction_id": "omitted when nested inside a transaction, present as transaction_id when returned standalone",
+        "process_stage": "stage (string, from ENUM)",
+        "log_level": "level (string, from ENUM)",
+        "message": "message (string)",
+        "created_at": "created_at (string, ISO 8601)"
+      }
+    }
+  },
+
+  "entity_examples": {
+    "_note": "One flat example per entity: a single row serialised on its own, with foreign keys left as raw ids. Each validates against the matching schema above.",
+
+    "category": {
+      "id": 2,
+      "name": "Transfer Received",
+      "type": "TRANSFER",
+      "direction": "CREDIT",
+      "description": "Peer-to-peer money received (\"You have received X RWF from ...\")"
+    },
+
+    "user": {
+      "id": 3,
+      "full_name": "Samuel Carter",
+      "phone_number": "250791666666",
+      "phone_masked": "*****666",
+      "type": "CUSTOMER",
+      "created_at": "2024-05-11T20:34:47+02:00"
+    },
+
+    "user_with_masked_number": {
+      "_note": "Jane Smith's number was masked in the source SMS as (*********013). The masked form is stored verbatim rather than guessed at, which is different from the number being unknown.",
+      "id": 2,
+      "full_name": "Jane Smith",
+      "phone_number": "*********013",
+      "phone_masked": "*****013",
+      "type": "CUSTOMER",
+      "created_at": "2024-05-10T16:30:51+02:00"
+    },
+
+    "transaction_flat": {
+      "_note": "The list-view shape: no nesting, no raw message text.",
+      "transaction_id": 4,
+      "financial_transaction_id": null,
+      "external_transaction_id": null,
+      "amount": "10000.00",
+      "fee": "100.00",
+      "balance_after": "28300.00",
+      "currency": "RWF",
+      "transaction_datetime": "2024-05-11T20:34:47+02:00",
+      "status": "COMPLETED",
+      "category": {
+        "id": 4,
+        "name": "Transfer Sent",
+        "type": "TRANSFER",
+        "direction": "DEBIT"
+      }
+    },
+
+    "log_entry": {
+      "id": 7,
+      "transaction_id": 1,
+      "stage": "LOAD",
+      "level": "INFO",
+      "message": "Parsed and inserted successfully",
+      "created_at": "2025-01-16T08:00:15+02:00"
+    },
+
+    "log_entry_unlinked": {
+      "_note": "transaction_id is null because this message never became a transaction.",
+      "id": 10,
+      "transaction_id": null,
+      "stage": "LOAD",
+      "level": "WARNING",
+      "message": "Skipped OTP SMS: not a financial transaction",
+      "created_at": "2025-01-16T08:00:16+02:00"
+    }
+  },
+
+  "complex_transaction": {
+    "_note": [
+      "A complete transaction with all related data nested, built from a real message:",
+      "*165*S*10000 RWF transferred to Samuel Carter (250791666666) from 36521838 at",
+      "2024-05-11 20:34:47 . Fee was: 100 RWF. New balance: 28300 RWF.",
+      "",
+      "Chosen because it has a non-zero fee, an unmasked phone number and two",
+      "participants in different roles, so the nested participants array actually",
+      "demonstrates the M:N resolution rather than looking decorative. It also has",
+      "no transaction id at all, which is why financial_transaction_id is null here",
+      "and why that column is not the primary key.",
+      "",
+      "Three nesting techniques are at work: category_id becomes an embedded",
+      "object, the junction table becomes an array of objects, and each",
+      "participant embeds the full user plus its role."
+    ],
+
+    "transaction_id": 4,
+    "financial_transaction_id": null,
+    "external_transaction_id": null,
+    "amount": "10000.00",
+    "fee": "100.00",
+    "balance_after": "28300.00",
+    "currency": "RWF",
+    "transaction_datetime": "2024-05-11T20:34:47+02:00",
+    "status": "COMPLETED",
+
+    "category": {
+      "id": 4,
+      "name": "Transfer Sent",
+      "type": "TRANSFER",
+      "direction": "DEBIT",
+      "description": "Peer-to-peer money sent (*165*S* pattern)"
+    },
+
+    "participants": [
+      {
+        "role": "SENDER",
+        "user": {
+          "id": 1,
+          "full_name": "Account Owner",
+          "phone_number": "250795963036",
+          "phone_masked": "*****036",
+          "type": "SELF",
+          "created_at": "2024-05-10T16:30:51+02:00"
+        }
+      },
+      {
+        "role": "RECEIVER",
+        "user": {
+          "id": 3,
+          "full_name": "Samuel Carter",
+          "phone_number": "250791666666",
+          "phone_masked": "*****666",
+          "type": "CUSTOMER",
+          "created_at": "2024-05-11T20:34:47+02:00"
+        }
+      }
+    ],
+
+    "processing_logs": [
+      {
+        "id": 3,
+        "transaction_id": 4,
+        "stage": "CATEGORIZE",
+        "level": "INFO",
+        "message": "Matched Transfer Sent pattern, fee 100 RWF",
+        "created_at": "2025-01-16T08:00:10+02:00"
+      }
+    ],
+
+    "raw_sms_body": "*165*S*10000 RWF transferred to Samuel Carter (250791666666) from 36521838 at 2024-05-11 20:34:47 . Fee was: 100 RWF. New balance: 28300 RWF. Kugura ama inite cg interineti kanda *182*2*1#"
+  },
+
+  "complex_transaction_three_party": {
+    "_note": "A second complex object showing why the junction table was worth the extra complexity. This agent withdrawal has the account owner and the agent in different roles on a single message, and a sender_id/receiver_id column pair could not have held both plus the till. It is also the only sample row with a fee above 300 RWF, which is what makes agent cash-out visibly expensive in the fee report.",
+
+    "transaction_id": 7,
+    "financial_transaction_id": "14098463509",
+    "external_transaction_id": null,
+    "amount": "20000.00",
+    "fee": "350.00",
+    "balance_after": "6400.00",
+    "currency": "RWF",
+    "transaction_datetime": "2024-05-26T02:10:27+02:00",
+    "status": "COMPLETED",
+
+    "category": {
+      "id": 6,
+      "name": "Withdrawal",
+      "type": "WITHDRAWAL",
+      "direction": "DEBIT",
+      "description": "Cash withdrawal via an agent"
+    },
+
+    "participants": [
+      {
+        "role": "SENDER",
+        "user": {
+          "id": 1,
+          "full_name": "Account Owner",
+          "phone_number": "250795963036",
+          "phone_masked": "*****036",
+          "type": "SELF",
+          "created_at": "2024-05-10T16:30:51+02:00"
+        }
+      },
+      {
+        "role": "AGENT",
+        "user": {
+          "id": 6,
+          "full_name": "Agent Sophia",
+          "phone_number": "250790777777",
+          "phone_masked": "*****777",
+          "type": "AGENT",
+          "created_at": "2024-05-26T02:10:27+02:00"
+        }
+      }
+    ],
+
+    "processing_logs": [
+      {
+        "id": 9,
+        "transaction_id": 7,
+        "stage": "LOAD",
+        "level": "INFO",
+        "message": "Agent withdrawal parsed successfully, 2 participants linked",
+        "created_at": "2025-01-16T08:00:16+02:00"
+      }
+    ],
+
+    "raw_sms_body": "You Account Owner (*********036) have via agent: Agent Sophia (250790777777), withdrawn 20000 RWF from your mobile money account: 36521838 at 2024-05-26 02:10:27 and you can now collect your money in cash. Your new balance: 6400 RWF. Fee paid: 350 RWF."
+  },
+
+  "api_response_examples": {
+    "_note": "Realistic API envelopes. List endpoints trim raw_sms_body and processing_logs to keep payloads small, and swap phone_number for phone_masked; the detail endpoint returns everything to an authenticated internal caller.",
+
+    "GET /api/transactions?page=1&limit=2": {
+      "success": true,
+      "data": [
+        {
+          "transaction_id": 3,
+          "financial_transaction_id": null,
+          "amount": "40000.00",
+          "fee": "0.00",
+          "currency": "RWF",
+          "transaction_datetime": "2024-05-11T18:43:49+02:00",
+          "status": "COMPLETED",
+          "category": { "id": 1, "name": "Deposit", "type": "DEPOSIT", "direction": "CREDIT" },
+          "participants": [
+            { "role": "SENDER",   "user": { "id": 9, "full_name": "Bank Deposit Channel", "phone_masked": null, "type": "BANK" } },
+            { "role": "RECEIVER", "user": { "id": 1, "full_name": "Account Owner", "phone_masked": "*****036", "type": "SELF" } }
+          ]
+        },
+        {
+          "transaction_id": 4,
+          "financial_transaction_id": null,
+          "amount": "10000.00",
+          "fee": "100.00",
+          "currency": "RWF",
+          "transaction_datetime": "2024-05-11T20:34:47+02:00",
+          "status": "COMPLETED",
+          "category": { "id": 4, "name": "Transfer Sent", "type": "TRANSFER", "direction": "DEBIT" },
+          "participants": [
+            { "role": "SENDER",   "user": { "id": 1, "full_name": "Account Owner", "phone_masked": "*****036", "type": "SELF" } },
+            { "role": "RECEIVER", "user": { "id": 3, "full_name": "Samuel Carter", "phone_masked": "*****666", "type": "CUSTOMER" } }
+          ]
+        }
+      ],
+      "pagination": { "page": 1, "limit": 2, "total_records": 10, "total_pages": 5 }
+    },
+
+    "GET /api/transactions/4": {
+      "success": true,
+      "data": "the full complex_transaction object above, including raw_sms_body and processing_logs"
+    },
+
+    "GET /api/users/3/transactions": {
+      "_note": "The user object is hoisted to the top level rather than repeated inside every participant array, since it is the same user on every row.",
+      "success": true,
+      "user": {
+        "id": 3,
+        "full_name": "Samuel Carter",
+        "phone_masked": "*****666",
+        "type": "CUSTOMER"
+      },
+      "data": [
+        {
+          "transaction_id": 4,
+          "amount": "10000.00",
+          "role": "RECEIVER",
+          "category": { "id": 4, "name": "Transfer Sent", "direction": "DEBIT" },
+          "transaction_datetime": "2024-05-11T20:34:47+02:00"
+        }
+      ],
+      "pagination": { "page": 1, "limit": 20, "total_records": 1, "total_pages": 1 }
+    },
+
+    "GET /api/categories/summary": {
+      "_note": "Reads v_monthly_summary, so the arithmetic happens in MySQL. Figures match query C1 in 04_crud_and_tests.sql.",
+      "success": true,
+      "data": [
+        { "category": "Deposit",           "direction": "CREDIT", "transaction_count": 1, "total_amount": "40000.00", "total_fees": "0.00" },
+        { "category": "Merchant Payment",  "direction": "DEBIT",  "transaction_count": 1, "total_amount": "25000.00", "total_fees": "0.00" },
+        { "category": "Withdrawal",        "direction": "DEBIT",  "transaction_count": 1, "total_amount": "20000.00", "total_fees": "350.00" },
+        { "category": "Transfer Sent",     "direction": "DEBIT",  "transaction_count": 1, "total_amount": "10000.00", "total_fees": "100.00" },
+        { "category": "Reversal",          "direction": "CREDIT", "transaction_count": 1, "total_amount": "3000.00",  "total_fees": "0.00" },
+        { "category": "Transfer Received", "direction": "CREDIT", "transaction_count": 1, "total_amount": "2000.00",  "total_fees": "0.00" }
+      ]
+    },
+
+    "error_response_404": {
+      "success": false,
+      "error": {
+        "code": "TRANSACTION_NOT_FOUND",
+        "message": "No transaction exists with id 99999"
+      }
+    },
+
+    "error_response_422": {
+      "_note": "A CHECK constraint or trigger failure is translated into a structured validation error rather than letting the raw SQLSTATE reach the client.",
+      "success": false,
+      "error": {
+        "code": "VALIDATION_FAILED",
+        "message": "The transaction could not be saved",
+        "details": [
+          { "field": "amount", "rule": "chk_tx_amount", "message": "amount must be zero or greater" },
+          { "field": "transaction_datetime", "rule": "trg_tx_validate_bi", "message": "transaction_datetime is in the future" }
+        ]
+      }
+    }
+  },
+
+  "serialisation_design_notes": [
+    "DECIMAL columns are serialised as strings, not JSON numbers. JSON has no fixed-point type, and a client that reads 10000.00 into a double will eventually disagree with the database about a total. Strings push the decision to the client, which can parse them with a decimal library. The alternative — integer minor units — works too, but RWF has no subunit in practice, so strings read more naturally.",
+    "DATETIME becomes an ISO 8601 string with the +02:00 Africa/Kigali offset attached. MySQL stores these naive, so without the offset a client in another zone would silently shift every timestamp.",
+    "ENUM columns become plain strings, in the same upper case the database uses. The JSON Schema enum lists mirror the SQL ENUM lists exactly, so a value the API rejects is a value MySQL would also have rejected — one rule, enforced in two places.",
+    "Nulls are kept explicit rather than omitted. A null financial_transaction_id is meaningful: it records that the source SMS carried no transaction id, which happens on 868 of the 1,691 messages and is different from the field being absent.",
+    "The Transaction_Participants junction table has no JSON counterpart. Its rows become the participants array, and participant_id is dropped entirely since it is an internal surrogate key with no meaning to an API consumer.",
+    "phone_number never leaves the API on a public endpoint. Responses carry phone_masked instead, which is the same substitution the v_transactions_masked view makes in the database, so the privacy rule holds whether a client reads through the API or straight from the dashboard view.",
+    "List endpoints omit raw_sms_body and processing_logs. Across the full corpus the raw text would dominate the payload, and clients browsing a list do not need it.",
+    "Nesting depth is capped at three levels (transaction, participants, user). Deeper would mean a user object containing its own transactions, which recurses without end."
+  ]
+}
