@@ -503,7 +503,7 @@ FLUSH PRIVILEGES;
 
 
 -- SECTION 8: CRUD OPERATIONS AND RULE TESTS
---CRUD
+-- CRUD
 SELECT '===== A1. CREATE — add a merchant and a transaction =====' AS test;
 
 INSERT INTO Users (full_name, phone_number, user_type)
