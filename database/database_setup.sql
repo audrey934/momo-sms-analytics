@@ -419,3 +419,38 @@ GRANT SELECT ON momo_sms_db.v_monthly_summary     TO 'momo_dashboard'@'localhost
 
 FLUSH PRIVILEGES;
 
+-- CRUD tests
+
+-- CREATE
+INSERT INTO Users (full_name, phone_number, user_type)
+VALUES ('Kigali Heights Pharmacy', '250788400123', 'MERCHANT');
+SET @new_user := LAST_INSERT_ID();
+
+INSERT INTO Transactions
+    (financial_transaction_id, category_id, amount, fee, balance_after,
+     transaction_datetime, status, raw_sms_body)
+VALUES
+    ('99001122334',
+     (SELECT category_id FROM Transaction_Categories WHERE category_name='Merchant Payment'),
+     7500.00, 0.00, 12500.00, '2025-01-14 10:02:33', 'COMPLETED',
+     'TxId: 99001122334. Your payment of 7,500 RWF to Kigali Heights Pharmacy 41234 has been completed at 2025-01-14 10:02:33. Your new balance: 12500 RWF. Fee was 0 RWF.');
+SET @new_tx := LAST_INSERT_ID();
+
+INSERT INTO Transaction_Participants (transaction_id, user_id, role) VALUES
+    (@new_tx, (SELECT user_id FROM Users WHERE user_type='SELF'), 'SENDER'),
+    (@new_tx, @new_user, 'MERCHANT');
+
+SELECT @new_tx AS created_transaction_id, @new_user AS created_user_id;
+
+-- READ
+SELECT t.financial_transaction_id, t.amount, t.fee, t.transaction_datetime,
+       c.category_name, c.direction,
+       GROUP_CONCAT(CONCAT(u.full_name,' (',p.role,')') ORDER BY p.role SEPARATOR ' | ') AS parties
+FROM Transactions t
+JOIN Transaction_Categories   c ON c.category_id = t.category_id
+JOIN Transaction_Participants p ON p.transaction_id = t.transaction_id
+JOIN Users                    u ON u.user_id = p.user_id
+WHERE t.transaction_id = @new_tx
+GROUP BY t.transaction_id;
+
+
