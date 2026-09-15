@@ -364,3 +364,29 @@ BEGIN
 END $$
 
 DELIMITER ;
+
+- RULE 7: dashboard view masks phone numbers, drops raw SMS text
+CREATE OR REPLACE VIEW v_transactions_masked AS
+SELECT
+    t.transaction_id,
+    t.financial_transaction_id,
+    c.category_name,
+    c.category_type,
+    c.direction,
+    t.amount,
+    t.fee,
+    t.currency,
+    t.transaction_datetime,
+    t.status,
+    s.full_name                                          AS sender_name,
+    CONCAT('*****', RIGHT(COALESCE(s.phone_number,'000'), 3)) AS sender_phone_masked,
+    r.full_name                                          AS receiver_name,
+    CONCAT('*****', RIGHT(COALESCE(r.phone_number,'000'), 3)) AS receiver_phone_masked
+FROM Transactions t
+    JOIN Transaction_Categories c ON c.category_id = t.category_id
+    LEFT JOIN Transaction_Participants ps
+           ON ps.transaction_id = t.transaction_id AND ps.role = 'SENDER'
+    LEFT JOIN Users s ON s.user_id = ps.user_id
+    LEFT JOIN Transaction_Participants pr
+           ON pr.transaction_id = t.transaction_id AND pr.role IN ('RECEIVER','AGENT','MERCHANT')
+    LEFT JOIN Users r ON r.user_id = pr.user_id;
