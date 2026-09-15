@@ -346,3 +346,24 @@ BEGIN
 END $$
 
 
+-- RULE 2 — Refuse transactions that cannot have happened     
+DROP TRIGGER IF EXISTS trg_tx_validate_bi $$
+CREATE TRIGGER trg_tx_validate_bi
+BEFORE INSERT ON Transactions
+FOR EACH ROW
+BEGIN
+    IF NEW.transaction_datetime > NOW() THEN
+        SIGNAL SQLSTATE '45001'
+            SET MESSAGE_TEXT = 'Rejected: transaction_datetime is in the future';
+    END IF;
+
+    IF NEW.fee > NEW.amount AND NEW.amount > 0 THEN
+        SIGNAL SQLSTATE '45002'
+            SET MESSAGE_TEXT = 'Rejected: fee cannot exceed the transaction amount';
+    END IF;
+
+    SET NEW.currency = UPPER(NEW.currency);
+END $$
+
+
+
