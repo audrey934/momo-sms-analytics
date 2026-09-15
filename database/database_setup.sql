@@ -406,3 +406,16 @@ FROM Transactions t
     JOIN Transaction_Categories c ON c.category_id = t.category_id
 WHERE t.status = 'COMPLETED'
 GROUP BY month, c.category_name, c.category_type, c.direction;
+
+-- RULE 9: least-privilege DB accounts (replace passwords before real use)
+DROP USER IF EXISTS 'momo_etl'@'localhost';
+CREATE USER 'momo_etl'@'localhost' IDENTIFIED BY 'CHANGE_ME_IN_ENV';
+GRANT SELECT, INSERT, UPDATE ON momo_sms_db.* TO 'momo_etl'@'localhost';
+
+DROP USER IF EXISTS 'momo_dashboard'@'localhost';
+CREATE USER 'momo_dashboard'@'localhost' IDENTIFIED BY 'CHANGE_ME_IN_ENV';
+GRANT SELECT ON momo_sms_db.v_transactions_masked TO 'momo_dashboard'@'localhost';
+GRANT SELECT ON momo_sms_db.v_monthly_summary     TO 'momo_dashboard'@'localhost';
+
+FLUSH PRIVILEGES;
+
