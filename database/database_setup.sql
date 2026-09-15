@@ -1,6 +1,4 @@
--- MoMo SMS Data Processing System — database_setup.sql
--- Full setup script. Run top to bottom:
---   mysql -u root -p < database/database_setup.sql
+-- Full script
 -- Sections
 --   1  Database
 --   2  Tables
