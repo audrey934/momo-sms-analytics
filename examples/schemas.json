@@ -2,7 +2,7 @@
   "_meta": {
     "file": "examples/json_schemas.json",
     "project": "MoMo SMS Data Processing System",
-    "team": "Team Kigali Data Lab",
+    "team": "Data squad",
     "authors": "Audrey Hategekimana (schemas, mapping, serialisation notes) with review from Akuzwe Anny Benitha (sample values checked against the SMS export)",
     "purpose": "JSON representations of the database entities, showing how relational rows are serialised for API responses.",
     "source_of_values": "All sample values are copied from data/raw/modified_sms_v2.xml or from the rows inserted by database/02_seed_data.sql. Nothing here is invented."
