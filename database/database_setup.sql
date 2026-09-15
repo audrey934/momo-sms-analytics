@@ -179,3 +179,188 @@ VALUES
  3000.00, 0.00, NULL, '2024-06-15 09:22:41', 'REVERSED',
  'A reversal has been initiated for your transaction to Mediatrice UWAYISENGA (250788658286) with 3000 RWF.'),
 
+(NULL, NULL,
+ (SELECT category_id FROM Transaction_Categories WHERE category_name='OTP Notification'),
+ 0.00, 0.00, NULL, '2024-06-18 07:55:12', 'COMPLETED',
+ '<#> Dear Customer, your MTN MoMo application one-time password is :2476.MTN MoMo does not recommend that you share or expose your one-time password with anyone.');
+
+INSERT INTO Transaction_Participants (transaction_id, user_id, role) VALUES
+((SELECT transaction_id FROM Transactions WHERE financial_transaction_id='76662021700'),
+ (SELECT user_id FROM Users WHERE full_name='Jane Smith'), 'SENDER'),
+((SELECT transaction_id FROM Transactions WHERE financial_transaction_id='76662021700'),
+ (SELECT user_id FROM Users WHERE user_type='SELF'), 'RECEIVER'),
+
+((SELECT transaction_id FROM Transactions WHERE financial_transaction_id='73214484437'),
+ (SELECT user_id FROM Users WHERE user_type='SELF'), 'SENDER'),
+((SELECT transaction_id FROM Transactions WHERE financial_transaction_id='73214484437'),
+ (SELECT user_id FROM Users WHERE full_name='Jane Smith'), 'RECEIVER'),
+
+((SELECT transaction_id FROM Transactions WHERE transaction_datetime='2024-05-11 18:43:49'),
+ (SELECT user_id FROM Users WHERE full_name='Bank Deposit Channel'), 'SENDER'),
+((SELECT transaction_id FROM Transactions WHERE transaction_datetime='2024-05-11 18:43:49'),
+ (SELECT user_id FROM Users WHERE user_type='SELF'), 'RECEIVER'),
+
+((SELECT transaction_id FROM Transactions WHERE transaction_datetime='2024-05-11 20:34:47'),
+ (SELECT user_id FROM Users WHERE user_type='SELF'), 'SENDER'),
+((SELECT transaction_id FROM Transactions WHERE transaction_datetime='2024-05-11 20:34:47'),
+ (SELECT user_id FROM Users WHERE full_name='Samuel Carter'), 'RECEIVER'),
+
+((SELECT transaction_id FROM Transactions WHERE financial_transaction_id='13913173274'),
+ (SELECT user_id FROM Users WHERE user_type='SELF'), 'SENDER'),
+((SELECT transaction_id FROM Transactions WHERE financial_transaction_id='13913173274'),
+ (SELECT user_id FROM Users WHERE full_name='MTN Airtime'), 'MERCHANT'),
+
+((SELECT transaction_id FROM Transactions WHERE financial_transaction_id='13947831685'),
+ (SELECT user_id FROM Users WHERE user_type='SELF'), 'SENDER'),
+((SELECT transaction_id FROM Transactions WHERE financial_transaction_id='13947831685'),
+ (SELECT user_id FROM Users WHERE full_name='DIRECT PAYMENT LTD'), 'MERCHANT'),
+
+((SELECT transaction_id FROM Transactions WHERE financial_transaction_id='14098463509'),
+ (SELECT user_id FROM Users WHERE user_type='SELF'), 'SENDER'),
+((SELECT transaction_id FROM Transactions WHERE financial_transaction_id='14098463509'),
+ (SELECT user_id FROM Users WHERE full_name='Agent Sophia'), 'AGENT'),
+
+((SELECT transaction_id FROM Transactions WHERE transaction_datetime='2024-06-02 14:11:09'),
+ (SELECT user_id FROM Users WHERE user_type='SELF'), 'SENDER'),
+((SELECT transaction_id FROM Transactions WHERE transaction_datetime='2024-06-02 14:11:09'),
+ (SELECT user_id FROM Users WHERE full_name='MTN Airtime'), 'MERCHANT'),
+
+((SELECT transaction_id FROM Transactions WHERE transaction_datetime='2024-06-15 09:22:41'),
+ (SELECT user_id FROM Users WHERE full_name='Mediatrice UWAYISENGA'), 'SENDER'),
+((SELECT transaction_id FROM Transactions WHERE transaction_datetime='2024-06-15 09:22:41'),
+ (SELECT user_id FROM Users WHERE user_type='SELF'), 'RECEIVER'),
+
+((SELECT transaction_id FROM Transactions WHERE transaction_datetime='2024-06-18 07:55:12'),
+ (SELECT user_id FROM Users WHERE user_type='SELF'), 'RECEIVER');
+
+INSERT INTO System_Logs (transaction_id, process_stage, log_level, message, created_at) VALUES
+(NULL, 'PARSE',      'INFO',    'Started parse of data/raw/modified_sms_v2.xml', '2025-01-16 08:00:01'),
+(NULL, 'PARSE',      'INFO',    'Read 1691 sms elements from the backup file', '2025-01-16 08:00:04'),
+(NULL, 'CLEAN',      'INFO',    'Normalised amounts, phone numbers and timestamps', '2025-01-16 08:00:07'),
+(NULL, 'CLEAN',      'WARNING', 'Amount token not found on 9 messages', '2025-01-16 08:00:08'),
+(NULL, 'CATEGORIZE', 'INFO',    'Applied 11 pattern rules across the corpus', '2025-01-16 08:00:10'),
+(NULL, 'CATEGORIZE', 'WARNING', '4 messages matched no rule, flagged for review', '2025-01-16 08:00:11'),
+((SELECT transaction_id FROM Transactions WHERE financial_transaction_id='76662021700'),
+ 'LOAD', 'INFO', 'Parsed and inserted successfully', '2025-01-16 08:00:15'),
+((SELECT transaction_id FROM Transactions WHERE financial_transaction_id='73214484437'),
+ 'LOAD', 'INFO', 'Parsed and inserted successfully', '2025-01-16 08:00:15'),
+((SELECT transaction_id FROM Transactions WHERE financial_transaction_id='14098463509'),
+ 'LOAD', 'INFO', 'Agent withdrawal parsed, 2 participants linked', '2025-01-16 08:00:16'),
+(NULL, 'LOAD',   'WARNING', 'Skipped OTP SMS: not a financial transaction', '2025-01-16 08:00:16'),
+(NULL, 'LOAD',   'ERROR',   'Rejected 1 row: category missing from lookup table', '2025-01-16 08:00:17'),
+(NULL, 'EXPORT', 'INFO',    'Wrote dashboard aggregates to data/processed/dashboard.json', '2025-01-16 08:00:19');
+
+
+-- Security & accuracy rules
+DELIMITER $$
+
+-- RULE 1: normalize name/phone on insert
+DROP TRIGGER IF EXISTS trg_users_clean_bi $$
+CREATE TRIGGER trg_users_clean_bi
+BEFORE INSERT ON Users
+FOR EACH ROW
+BEGIN
+    SET NEW.full_name = TRIM(REGEXP_REPLACE(NEW.full_name, '[[:space:]]+', ' '));
+
+    IF NEW.phone_number IS NOT NULL AND NEW.phone_number NOT LIKE '*%' THEN
+        SET NEW.phone_number = REGEXP_REPLACE(NEW.phone_number, '[^0-9]', '');
+
+        IF CHAR_LENGTH(NEW.phone_number) = 10 AND LEFT(NEW.phone_number, 1) = '0' THEN
+            SET NEW.phone_number = CONCAT('250', SUBSTRING(NEW.phone_number, 2));
+        END IF;
+
+        IF CHAR_LENGTH(NEW.phone_number) = 9 THEN
+            SET NEW.phone_number = CONCAT('250', NEW.phone_number);
+        END IF;
+    END IF;
+END $$
+
+-- RULE 2: reject impossible transactions (future date, fee > amount)
+DROP TRIGGER IF EXISTS trg_tx_validate_bi $$
+CREATE TRIGGER trg_tx_validate_bi
+BEFORE INSERT ON Transactions
+FOR EACH ROW
+BEGIN
+    IF NEW.transaction_datetime > NOW() THEN
+        SIGNAL SQLSTATE '45001'
+            SET MESSAGE_TEXT = 'Rejected: transaction_datetime is in the future';
+    END IF;
+
+    IF NEW.fee > NEW.amount AND NEW.amount > 0 THEN
+        SIGNAL SQLSTATE '45002'
+            SET MESSAGE_TEXT = 'Rejected: fee cannot exceed the transaction amount';
+    END IF;
+
+    SET NEW.currency = UPPER(NEW.currency);
+END $$
+
+-- RULE 3: same user can't be sender and receiver on one transaction
+DROP TRIGGER IF EXISTS trg_part_no_self_bi $$
+CREATE TRIGGER trg_part_no_self_bi
+BEFORE INSERT ON Transaction_Participants
+FOR EACH ROW
+BEGIN
+    DECLARE v_clash INT DEFAULT 0;
+
+    SELECT COUNT(*) INTO v_clash
+    FROM Transaction_Participants
+    WHERE transaction_id = NEW.transaction_id
+      AND user_id        = NEW.user_id
+      AND role          <> NEW.role
+      AND role          IN ('SENDER','RECEIVER')
+      AND NEW.role      IN ('SENDER','RECEIVER');
+
+    IF v_clash > 0 THEN
+        SIGNAL SQLSTATE '45003'
+            SET MESSAGE_TEXT = 'Rejected: the same party cannot be both SENDER and RECEIVER';
+    END IF;
+END $$
+
+-- RULE 4: completed transactions are append-only, no deletes
+DROP TRIGGER IF EXISTS trg_tx_block_delete_bd $$
+CREATE TRIGGER trg_tx_block_delete_bd
+BEFORE DELETE ON Transactions
+FOR EACH ROW
+BEGIN
+    IF OLD.status = 'COMPLETED' THEN
+        SIGNAL SQLSTATE '45004'
+            SET MESSAGE_TEXT = 'Rejected: completed transactions are append-only; set status = REVERSED instead';
+    END IF;
+END $$
+
+-- RULE 5: auto-log any change to amount/fee/status
+DROP TRIGGER IF EXISTS trg_tx_audit_au $$
+CREATE TRIGGER trg_tx_audit_au
+AFTER UPDATE ON Transactions
+FOR EACH ROW
+BEGIN
+    IF OLD.amount <> NEW.amount
+       OR OLD.fee <> NEW.fee
+       OR OLD.status <> NEW.status THEN
+
+        INSERT INTO System_Logs (transaction_id, process_stage, log_level, message)
+        VALUES (
+            NEW.transaction_id,
+            'AUDIT',
+            'WARNING',
+            CONCAT('Modified by ', CURRENT_USER(),
+                   ' | amount ', OLD.amount,  ' -> ', NEW.amount,
+                   ' | fee ',    OLD.fee,     ' -> ', NEW.fee,
+                   ' | status ', OLD.status,  ' -> ', NEW.status)
+        );
+    END IF;
+END $$
+
+-- RULE 6: raw_sms_body is immutable once inserted
+DROP TRIGGER IF EXISTS trg_tx_body_immutable_bu $$
+CREATE TRIGGER trg_tx_body_immutable_bu
+BEFORE UPDATE ON Transactions
+FOR EACH ROW
+BEGIN
+    IF OLD.raw_sms_body <> NEW.raw_sms_body THEN
+        SIGNAL SQLSTATE '45005'
+            SET MESSAGE_TEXT = 'Rejected: raw_sms_body is immutable';
+    END IF;
+END $$
+
+DELIMITER ;
