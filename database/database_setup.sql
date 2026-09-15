@@ -608,3 +608,105 @@ SELECT '===== B. Each statement below must be rejected =====' AS test;
 -- INSERT INTO Transactions (category_id, amount, transaction_datetime, raw_sms_body)
 -- VALUES (1, 100.00, '2024-06-01 10:00:00', '');
 
+
+-- DASHBOARD QUERIES
+
+
+SELECT '===== C1. Volume and value by category =====' AS query;
+
+SELECT c.category_name, c.category_type, c.direction,
+       COUNT(*)                AS txn_count,
+       SUM(t.amount)           AS total_amount,
+       ROUND(AVG(t.amount), 2) AS avg_amount,
+       SUM(t.fee)              AS total_fees,
+       ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM Transactions), 1) AS pct_of_volume
+FROM Transactions t
+JOIN Transaction_Categories c ON c.category_id = t.category_id
+GROUP BY c.category_id
+ORDER BY total_amount DESC;
+
+
+SELECT '===== C2. Money in vs money out, by month =====' AS query;
+
+-- Conditional aggregation pivots the direction into two columns in one
+-- pass, which avoids joining the table to itself.
+SELECT DATE_FORMAT(t.transaction_datetime, '%Y-%m') AS month,
+       SUM(CASE WHEN c.direction='CREDIT' THEN t.amount ELSE 0 END)       AS money_in,
+       SUM(CASE WHEN c.direction='DEBIT'  THEN t.amount ELSE 0 END)       AS money_out,
+       SUM(CASE WHEN c.direction='CREDIT' THEN t.amount ELSE -t.amount END) AS net_flow,
+       COUNT(*)                                                           AS txn_count
+FROM Transactions t
+JOIN Transaction_Categories c ON c.category_id = t.category_id
+WHERE t.status = 'COMPLETED'
+GROUP BY month
+ORDER BY month;
+
+
+SELECT '===== C3. Total sent vs received for the account owner =====' AS query;
+
+SELECT c.direction, COUNT(*) AS txn_count, SUM(t.amount) AS total_amount
+FROM Transactions t
+JOIN Transaction_Categories   c ON c.category_id = t.category_id
+JOIN Transaction_Participants p ON p.transaction_id = t.transaction_id
+WHERE p.user_id = (SELECT user_id FROM Users WHERE user_type='SELF')
+GROUP BY c.direction;
+
+
+SELECT '===== C4. Top counterparties — the query the junction table exists for =====' AS query;
+
+-- With sender_id/receiver_id columns this would need a UNION of two
+-- queries. Every party reaches its transactions by one join path here.
+SELECT u.full_name, u.user_type,
+       COUNT(DISTINCT p.transaction_id) AS txn_count,
+       SUM(t.amount)                    AS total_value,
+       MAX(t.transaction_datetime)      AS last_seen
+FROM Users u
+JOIN Transaction_Participants p ON p.user_id = u.user_id
+JOIN Transactions t             ON t.transaction_id = p.transaction_id
+WHERE u.user_type <> 'SELF'
+GROUP BY u.user_id
+ORDER BY total_value DESC
+LIMIT 10;
+
+
+SELECT '===== C5. Roll-up by product grouping =====' AS query;
+
+SELECT c.category_type,
+       COUNT(*)      AS txn_count,
+       SUM(t.amount) AS total_amount,
+       SUM(t.fee)    AS fees_paid,
+       ROUND(100.0 * SUM(t.fee) / NULLIF(SUM(t.amount),0), 3) AS fee_pct_of_value
+FROM Transactions t
+JOIN Transaction_Categories c ON c.category_id = t.category_id
+GROUP BY c.category_type
+ORDER BY total_amount DESC;
+
+
+SELECT '===== C6. Largest transaction in each category =====' AS query;
+
+SELECT category_name, financial_transaction_id, amount, transaction_datetime
+FROM (
+    SELECT c.category_name, t.financial_transaction_id, t.amount, t.transaction_datetime,
+           ROW_NUMBER() OVER (PARTITION BY c.category_id ORDER BY t.amount DESC) AS rn
+    FROM Transactions t
+    JOIN Transaction_Categories c ON c.category_id = t.category_id
+) ranked
+WHERE rn = 1
+ORDER BY amount DESC;
+
+
+SELECT '===== C7. ETL health for the last run =====' AS query;
+
+SELECT process_stage, log_level, COUNT(*) AS entries
+FROM System_Logs
+GROUP BY process_stage, log_level
+ORDER BY FIELD(log_level,'ERROR','WARNING','INFO'), process_stage;
+
+
+SELECT '===== C8. Privacy check — the view returns no full phone number =====' AS query;
+
+SELECT transaction_id, category_name, amount,
+       sender_name, sender_phone_masked, receiver_name, receiver_phone_masked
+FROM v_transactions_masked
+ORDER BY amount DESC
+LIMIT 5;
