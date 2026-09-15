@@ -365,7 +365,7 @@ END $$
 
 DELIMITER ;
 
-- RULE 7: dashboard view masks phone numbers, drops raw SMS text
+-- RULE 7: dashboard view masks phone numbers, drops raw SMS text
 CREATE OR REPLACE VIEW v_transactions_masked AS
 SELECT
     t.transaction_id,
