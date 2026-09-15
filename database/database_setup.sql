@@ -319,3 +319,30 @@ INSERT INTO System_Logs (transaction_id, process_stage, log_level, message, crea
 (NULL, 'LOAD',   'ERROR',   'Rejected 1 row: category emitted by parser missing from lookup table', '2025-01-16 08:00:17'),
 (NULL, 'EXPORT', 'INFO',    'Wrote dashboard aggregates to data/processed/dashboard.json', '2025-01-16 08:00:19');
 
+
+
+-- SECTION 6: TRIGGERS
+DELIMITER $$
+
+-- RULE 1 — Clean up party data on the way in                  
+DROP TRIGGER IF EXISTS trg_users_clean_bi $$
+CREATE TRIGGER trg_users_clean_bi
+BEFORE INSERT ON Users
+FOR EACH ROW
+BEGIN
+    SET NEW.full_name = TRIM(REGEXP_REPLACE(NEW.full_name, '[[:space:]]+', ' '));
+
+    IF NEW.phone_number IS NOT NULL AND NEW.phone_number NOT LIKE '*%' THEN
+        SET NEW.phone_number = REGEXP_REPLACE(NEW.phone_number, '[^0-9]', '');
+
+        IF CHAR_LENGTH(NEW.phone_number) = 10 AND LEFT(NEW.phone_number, 1) = '0' THEN
+            SET NEW.phone_number = CONCAT('250', SUBSTRING(NEW.phone_number, 2));
+        END IF;
+
+        IF CHAR_LENGTH(NEW.phone_number) = 9 THEN
+            SET NEW.phone_number = CONCAT('250', NEW.phone_number);
+        END IF;
+    END IF;
+END $$
+
+
