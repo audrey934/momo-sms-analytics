@@ -490,4 +490,23 @@ WHERE t.status = 'COMPLETED'
 GROUP BY month
 ORDER BY month;
 
+SELECT c.direction, COUNT(*) AS txn_count, SUM(t.amount) AS total_amount
+FROM Transactions t
+JOIN Transaction_Categories   c ON c.category_id = t.category_id
+JOIN Transaction_Participants p ON p.transaction_id = t.transaction_id
+WHERE p.user_id = (SELECT user_id FROM Users WHERE user_type='SELF')
+GROUP BY c.direction;
+
+SELECT u.full_name, u.user_type,
+       COUNT(DISTINCT p.transaction_id) AS txn_count,
+       SUM(t.amount)                    AS total_value,
+       MAX(t.transaction_datetime)      AS last_seen
+FROM Users u
+JOIN Transaction_Participants p ON p.user_id = u.user_id
+JOIN Transactions t             ON t.transaction_id = p.transaction_id
+WHERE u.user_type <> 'SELF'
+GROUP BY u.user_id
+ORDER BY total_value DESC
+LIMIT 10;
+
 
