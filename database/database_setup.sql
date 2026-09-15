@@ -7,11 +7,11 @@ USE momo_sms_db;
 
 -- Users: senders, receivers, agents, merchants. SELF = account owner.
 CREATE TABLE Users (
-    user_id       INT AUTO_INCREMENT PRIMARY KEY,
-    full_name     VARCHAR(100) NOT NULL,
+    user_id       INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Unique number for each person' ,
+    full_name     VARCHAR(100) NOT NULL COMMENT 'Name as written in the message',
     phone_number  VARCHAR(20) NULL COMMENT 'MSISDN, or masked form e.g. *********013',
-    user_type     ENUM('SELF','CUSTOMER','AGENT','MERCHANT','BANK') NOT NULL DEFAULT 'CUSTOMER',
-    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    user_type     ENUM('SELF','CUSTOMER','AGENT','MERCHANT','BANK') NOT NULL DEFAULT 'CUSTOMER' COMMENT 'SELF is the account owner',
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'When we first saw this person',
 
     CONSTRAINT uq_users_name_phone   UNIQUE (full_name, phone_number),
     CONSTRAINT chk_users_name_len    CHECK (CHAR_LENGTH(TRIM(full_name)) >= 2),
@@ -24,29 +24,29 @@ CREATE TABLE Users (
 
 -- Transaction_Categories: derived from SMS pattern
 CREATE TABLE Transaction_Categories (
-    category_id    INT AUTO_INCREMENT PRIMARY KEY,
-    category_name  VARCHAR(50) NOT NULL UNIQUE,
-    category_type  ENUM('TRANSFER','PAYMENT','DEPOSIT','WITHDRAWAL','AIRTIME','REVERSAL','SYSTEM') NOT NULL,
+    category_id    INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Unique number for each category',
+    category_name  VARCHAR(50) NOT NULL UNIQUE  COMMENT 'For example Deposit, Payment, Withdrawal',
+    category_type  ENUM('TRANSFER','PAYMENT','DEPOSIT','WITHDRAWAL','AIRTIME','REVERSAL','SYSTEM') NOT NULL  COMMENT 'Wider grouping, used for the roll-up chart',
     direction      ENUM('CREDIT','DEBIT','NEUTRAL') NOT NULL COMMENT 'Balance impact; NEUTRAL = non-financial (OTP)',
-    description    VARCHAR(255) NULL,
+    description    VARCHAR(255) NULL COMMENT 'Which kind of message maps here',
 
     CONSTRAINT chk_category_name_len CHECK (CHAR_LENGTH(TRIM(category_name)) >= 3)
 ) ENGINE=InnoDB COMMENT='Lookup table for transaction classification';
 
 -- Transactions: one row per parsed SMS
 CREATE TABLE Transactions (
-    transaction_id           INT AUTO_INCREMENT PRIMARY KEY,
-    financial_transaction_id VARCHAR(30) NULL COMMENT 'MTN TxId; not all messages carry one',
+    transaction_id           INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Unique number for each transaction',
+    financial_transaction_id VARCHAR(30) NULL COMMENT 'MTN TxId; not all messages carry one' ,
     external_transaction_id  VARCHAR(30) NULL COMMENT 'Third-party ref on some merchant messages',
-    category_id              INT NOT NULL,
-    amount                   DECIMAL(12,2) NOT NULL,
-    fee                      DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    currency                 CHAR(3) NOT NULL DEFAULT 'RWF',
-    balance_after            DECIMAL(14,2) NULL,
-    transaction_datetime     DATETIME NOT NULL,
-    status                   ENUM('COMPLETED','PENDING','FAILED','REVERSED') NOT NULL DEFAULT 'COMPLETED',
+    category_id              INT NOT NULL COMMENT 'Points to Transaction_Categories',
+    amount                   DECIMAL(12,2) NOT NULL COMMENT 'The amount in RWF, stored exactly',
+    fee                      DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT 'What MTN charged, or 0',
+    currency                 CHAR(3) NOT NULL DEFAULT 'RWF' COMMENT 'Always RWF in our data',
+    balance_after            DECIMAL(14,2) NULL COMMENT 'Balance after, when the message gave one',
+    transaction_datetime     DATETIME NOT NULL COMMENT 'Time inside the message, not when it arrived',
+    status                   ENUM('COMPLETED','PENDING','FAILED','REVERSED') NOT NULL DEFAULT 'COMPLETED' COMMENT 'We mark REVERSED instead of deleting', 
     raw_sms_body             TEXT NOT NULL COMMENT 'Original SMS text, kept for audit',
-    created_at               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP  COMMENT 'When this row was added',
 
     CONSTRAINT fk_tx_category FOREIGN KEY (category_id)
         REFERENCES Transaction_Categories(category_id)
@@ -68,10 +68,10 @@ CREATE INDEX idx_tx_amount        ON Transactions(amount);
 
 -- Transaction_Participants: junction table, resolves M:N (sender/receiver/agent per transaction)
 CREATE TABLE Transaction_Participants (
-    participant_id  INT AUTO_INCREMENT PRIMARY KEY,
-    transaction_id  INT NOT NULL,
-    user_id         INT NOT NULL,
-    role            ENUM('SENDER','RECEIVER','AGENT','MERCHANT') NOT NULL,
+    participant_id  INT AUTO_INCREMENT PRIMARY KEY 'Unique number for each link',,
+    transaction_id  INT NOT NULL COMMENT 'Points to Transactions',
+    user_id         INT NOT NULL  COMMENT 'Points to Users',
+    role            ENUM('SENDER','RECEIVER','AGENT','MERCHANT') NOT NULL  COMMENT 'What this person did in this transaction',
 
     CONSTRAINT fk_part_transaction FOREIGN KEY (transaction_id)
         REFERENCES Transactions(transaction_id)
@@ -87,12 +87,12 @@ CREATE INDEX idx_part_user ON Transaction_Participants(user_id, role);
 
 -- System_Logs: ETL pipeline log entries
 CREATE TABLE System_Logs (
-    log_id         INT AUTO_INCREMENT PRIMARY KEY,
+    log_id         INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Unique number for each log entry',
     transaction_id INT NULL COMMENT 'NULL for pipeline-wide events',
-    process_stage  ENUM('PARSE','CLEAN','CATEGORIZE','LOAD','EXPORT','API','AUDIT') NOT NULL DEFAULT 'PARSE',
-    log_level      ENUM('INFO','WARNING','ERROR') NOT NULL DEFAULT 'INFO',
-    message        VARCHAR(255) NOT NULL,
-    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    process_stage  ENUM('PARSE','CLEAN','CATEGORIZE','LOAD','EXPORT','API','AUDIT') NOT NULL DEFAULT 'PARSE' COMMENT 'Which step wrote this',
+    log_level      ENUM('INFO','WARNING','ERROR') NOT NULL DEFAULT 'INFO' COMMENT 'How serious it is',
+    message        VARCHAR(255) NOT NULL 'What happened',
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'When it was written',
 
     CONSTRAINT fk_log_transaction FOREIGN KEY (transaction_id)
         REFERENCES Transactions(transaction_id)
