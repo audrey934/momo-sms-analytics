@@ -132,3 +132,13 @@ CREATE TABLE System_Logs (
         ON UPDATE CASCADE ON DELETE SET NULL,
     CONSTRAINT chk_log_message_len CHECK (CHAR_LENGTH(TRIM(message)) > 0)
 ) ENGINE=InnoDB COMMENT='ETL / parsing pipeline log entries';
+
+-- SECTION 3: INDEXES
+
+CREATE INDEX idx_tx_datetime      ON Transactions(transaction_datetime);
+CREATE INDEX idx_tx_category_date ON Transactions(category_id, transaction_datetime);
+CREATE INDEX idx_tx_status        ON Transactions(status);
+CREATE INDEX idx_tx_amount        ON Transactions(amount);
+CREATE INDEX idx_part_user        ON Transaction_Participants(user_id, role);
+CREATE INDEX idx_log_level_time   ON System_Logs(log_level, created_at);
+CREATE INDEX idx_log_stage        ON System_Logs(process_stage);
