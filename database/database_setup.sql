@@ -366,4 +366,38 @@ BEGIN
 END $$
 
 
+-- RULE 3 — Nobody sends money to themselves                  
+DROP TRIGGER IF EXISTS trg_part_no_self_bi $$
+CREATE TRIGGER trg_part_no_self_bi
+BEFORE INSERT ON Transaction_Participants
+FOR EACH ROW
+BEGIN
+    DECLARE v_clash INT DEFAULT 0;
 
+    SELECT COUNT(*) INTO v_clash
+    FROM Transaction_Participants
+    WHERE transaction_id = NEW.transaction_id
+      AND user_id        = NEW.user_id
+      AND role          <> NEW.role
+      AND role          IN ('SENDER','RECEIVER')
+      AND NEW.role      IN ('SENDER','RECEIVER');
+
+    IF v_clash > 0 THEN
+        SIGNAL SQLSTATE '45003'
+            SET MESSAGE_TEXT = 'Rejected: the same party cannot be both SENDER and RECEIVER';
+    END IF;
+END $$
+
+
+-- RULE 4 — Completed transactions are never deleted   
+
+DROP TRIGGER IF EXISTS trg_tx_block_delete_bd $$
+CREATE TRIGGER trg_tx_block_delete_bd
+BEFORE DELETE ON Transactions
+FOR EACH ROW
+BEGIN
+    IF OLD.status = 'COMPLETED' THEN
+        SIGNAL SQLSTATE '45004'
+            SET MESSAGE_TEXT = 'Rejected: completed transactions are append-only; set status = REVERSED instead';
+    END IF;
+END $$
