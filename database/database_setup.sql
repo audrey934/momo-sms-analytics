@@ -453,4 +453,20 @@ JOIN Users                    u ON u.user_id = p.user_id
 WHERE t.transaction_id = @new_tx
 GROUP BY t.transaction_id;
 
+-- UPDATE
+UPDATE Transactions SET amount = 8000.00 WHERE transaction_id = @new_tx;
+
+SELECT transaction_id, amount FROM Transactions WHERE transaction_id = @new_tx;
+SELECT log_id, transaction_id, process_stage, log_level, message
+FROM System_Logs WHERE transaction_id = @new_tx AND process_stage = 'AUDIT';
+
+-- DELETE (RULE 4 blocks deleting COMPLETED, so reverse first)
+UPDATE Transactions SET status = 'REVERSED' WHERE transaction_id = @new_tx;
+DELETE FROM Transactions WHERE transaction_id = @new_tx;
+DELETE FROM Users        WHERE user_id = @new_user;
+
+SELECT COUNT(*) AS transactions_left FROM Transactions        WHERE transaction_id = @new_tx;
+SELECT COUNT(*) AS participants_left FROM Transaction_Participants WHERE transaction_id = @new_tx;
+
+
 
