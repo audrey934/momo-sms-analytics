@@ -27,6 +27,9 @@ def save_data(transactions):
 transactions = load_data()
 
 
+next_id = max((t["id"] for t in transactions), default=0) + 1
+
+
 def check_auth(header):
     """Check if the request has the right username and password."""
     if not header:
@@ -46,6 +49,7 @@ class SimpleAPI(BaseHTTPRequestHandler):
     def _unauthorized(self):
         """Send back a 401 error if login fails."""
         self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="MoMo API"')
         self.end_headers()
         self.wfile.write(b"Unauthorized")
 
@@ -70,7 +74,7 @@ class SimpleAPI(BaseHTTPRequestHandler):
             return self._unauthorized()
 
         if self.path == "/transactions":
-            # Return all transactions
+            
             return self._send_json(200, transactions)
 
         if self.path.startswith("/transactions/"):
@@ -83,13 +87,17 @@ class SimpleAPI(BaseHTTPRequestHandler):
             except ValueError:
                 return self._send_json(400, {"error": "Bad request"})
 
- 
+        
+        return self._send_json(404, {"error": "Not found"})
+
     def do_POST(self):
+        global next_id
         if not check_auth(self.headers.get("Authorization")):
             return self._unauthorized()
 
         data = self._read_body()
-        data["id"] = len(transactions) + 1 
+        data["id"] = next_id  
+        next_id += 1
         transactions.append(data)
         save_data(transactions)
         return self._send_json(201, data)

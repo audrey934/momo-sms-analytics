@@ -1,134 +1,155 @@
-MoMo Transactions API — Simple Guide
-Base URL: http://localhost:8000  
-All requests need a username and password (Basic Auth). If you don’t include them or they’re wrong, the server replies with 401 Unauthorized.
+# MoMo Transactions API — Documentation
 
- GET /transactions
-Get the full list of transactions.
+Base URL: `http://localhost:8000`
 
-Example request
+All endpoints require HTTP Basic Authentication (`audrey` / `anniyera`). Requests without valid credentials receive `401 Unauthorized`.
 
-bash
-curl -u admin:momo_secret_2024 http://localhost:8000/transactions
-Example response
+---
 
-json
+## GET /transactions
+
+Returns all transactions.
+
+**Request**
+```
+curl -u audrey:anniyera http://localhost:8000/transactions
+```
+
+**Response — 200 OK**
+```json
 [
   {
-    "id": 2,
-    "type": "payment",
-    "amount": 1000.0,
-    "counterparty": "Jane Smith"
+    "id": 1,
+    "date": "1715351458724",
+    "readable_date": "10 May 2024 4:30:58 PM",
+    "type": "received_money",
+    "amount": 2000.0,
+    "counterparty": "Jane Smith",
+    "transaction_id": "76662021700",
+    "raw_body": "You have received 2000 RWF from Jane Smith ..."
   }
 ]
-Possible errors
+```
 
-401 Unauthorized → you didn’t log in correctly
+**Errors**: `401 Unauthorized`
 
- GET /transactions/{id}
-Get one transaction by its ID.
+---
 
-Example request
+## GET /transactions/{id}
 
-bash
-curl -u admin:momo_secret_2024 http://localhost:8000/transactions/2
-Example response
+Returns a single transaction by id.
 
-json
+**Request**
+```
+curl -u audrey:anniyera http://localhost:8000/transactions/10
+```
+
+**Response — 200 OK**
+```json
 {
-  "id": 2,
+  "id": 10,
+  "date": "1715513672603",
+  "readable_date": "12 May 2024 1:34:32 PM",
   "type": "payment",
-  "amount": 1000.0,
-  "counterparty": "Jane Smith"
+  "amount": 3500.0,
+  "counterparty": "Alex Doe",
+  "transaction_id": "82113964658",
+  "raw_body": "TxId: 82113964658. Your payment of 3,500 RWF to Alex Doe ..."
 }
-Possible errors
+```
 
-401 Unauthorized → bad login
+**Errors**
+- `401 Unauthorized`
+- `400 Bad Request` — id in the URL isn't a number
+- `404 Not Found` — no transaction with that id
 
-404 Not Found → no transaction with that ID
+---
 
- POST /transactions
-Add a new transaction. The server will give it an ID automatically.
+## POST /transactions
 
-Example request
+Creates a new transaction. The server assigns the `id`.
 
-bash
-curl -u admin:momo_secret_2024 -X POST http://localhost:8000/transactions \
+**Request**
+```
+curl -u audrey:anniyera -X POST http://localhost:8000/transactions \
   -H "Content-Type: application/json" \
   -d '{"type":"payment","amount":5000,"counterparty":"Test Vendor"}'
-Example response
+```
 
-json
+**Response — 201 Created**
+```json
 {
-  "id": 1692,
   "type": "payment",
   "amount": 5000,
-  "counterparty": "Test Vendor"
+  "counterparty": "Test Vendor",
+  "id": 1692
 }
-Possible errors
+```
 
-401 Unauthorized → bad login
+**Errors**: `401 Unauthorized`
 
-400 Bad Request → you didn’t send valid JSON
+---
 
- PUT /transactions/{id}
-Update an existing transaction.
+## PUT /transactions/{id}
 
-Example request
+Updates fields on an existing transaction (only the fields you send are changed).
 
-bash
-curl -u admin:momo_secret_2024 -X PUT http://localhost:8000/transactions/1692 \
+**Request**
+```
+curl -u audrey:anniyera -X PUT http://localhost:8000/transactions/1692 \
   -H "Content-Type: application/json" \
-  -d '{"type":"payment","amount":7500,"counterparty":"Updated Vendor"}'
-Example response
+  -d '{"amount":7500}'
+```
 
-json
+**Response — 200 OK**
+```json
 {
-  "id": 1692,
   "type": "payment",
   "amount": 7500,
-  "counterparty": "Updated Vendor"
+  "counterparty": "Test Vendor",
+  "id": 1692
 }
-Possible errors
+```
 
-401 Unauthorized → bad login
+**Errors**
+- `401 Unauthorized`
+- `400 Bad Request` — id in the URL isn't a number
+- `404 Not Found` — no transaction with that id
 
-400 Bad Request → invalid JSON
+---
 
-404 Not Found → no transaction with that ID
+## DELETE /transactions/{id}
 
-DELETE /transactions/{id}
-Remove a transaction.
+Deletes a transaction.
 
-Example request
+**Request**
+```
+curl -u audrey:anniyera -X DELETE http://localhost:8000/transactions/1692
+```
 
-bash
-curl -u admin:momo_secret_2024 -X DELETE http://localhost:8000/transactions/1692
-Example response
+**Response — 200 OK**
+```json
+{ "message": "Deleted" }
+```
 
-json
-{ "message": "Transaction 1692 deleted" }
-Possible errors
-
-401 Unauthorized → bad login
-
-404 Not Found → no transaction with that ID
-
- Error Codes Quick Reference
-Code	Meaning	When it happens
-400	Bad Request	You sent broken JSON
-401	Unauthorized	Wrong or missing login
-404	Not Found	Route or ID doesn’t exist
+**Errors**
+ `401 Unauthorized`
+ `400 Bad Request` — id in the URL isn't a number
+ `404 Not Found` — no transaction with that id
 
 
- Security Note
-Right now the API uses Basic Auth. That means your username and password are sent (just base64‑encoded, not encrypted) with every request. This is fine for practice, but in real systems it’s weak because:
 
-Anyone who sees the traffic can decode your password if you’re not using HTTPS.
+## Error code summary
 
-Even with HTTPS, the same password is reused every time, so if it leaks once, it’s compromised forever.
+| Code | Meaning | When it happens |
+|---|---|---|
+| 400 | Bad Request | The `{id}` in the URL isn't a valid integer |
+| 401 | Unauthorized | Missing or incorrect Basic Auth credentials |
+| 404 | Not Found | No transaction with the given id, or an unrecognized route |
 
-Better options in real projects:
+## Security note
 
-JWT (JSON Web Tokens): You log in once, get a temporary token, and use that instead of sending your password every time.
+This API uses HTTP Basic Auth, which sends the username and password base64-encoded — not encrypted — on every single request. Base64 is trivially reversible, so anyone who can see the traffic can recover the real password directly. Even over HTTPS, the same static credential is reused on every call, so one leak compromises the account indefinitely. Stronger alternatives:
 
-OAuth2: Lets a trusted identity provider handle login and gives you short‑lived tokens with specific permissions.
+ **JWT (JSON Web Tokens)**: the client authenticates once and receives a signed, time-limited token to send on subsequent requests, so the password isn't transmitted repeatedly and a leaked token eventually expires.
+ **OAuth2**: delegates authentication to a dedicated identity provider and issues scoped, revocable access tokens, so credentials are never shared directly with the API.
