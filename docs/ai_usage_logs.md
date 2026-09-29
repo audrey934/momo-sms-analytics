@@ -110,7 +110,52 @@ AI was used to draft the invalid statements in database/rule_tests.sql. Each one
 
 We ran them individually to see the errors.  
 
-## 7. Verification of AI-Supplied Information
+---
+
+## 7. API Security
+
+### Basic Authentication
+
+AI was used to learn why Basic Auth is weak. Base64 is not encryption; the password is sent with every request, and it is only safe over HTTPS.
+
+**Source verified:** [RFC 7617: The 'Basic' HTTP Authentication Scheme](https://www.rfc-editor.org/rfc/rfc7617)
+
+### 401 Unauthorized response
+
+AI was used to confirm that a failed login should return 401 with a `WWW-Authenticate` header. The team tested this with wrong credentials using curl.
+
+**Source verified:** [RFC 9110: HTTP Semantics, Section 15.5.2](https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2)
+
+
+### Other security concerns
+
+AI was used to list common API risks (authorization, input validation, rate limiting, logging). The team checked which ones our API covers.
+
+**Source verified:** [OWASP API Security Top 10 (2023)](https://owasp.org/API-Security/editions/2023/en/0x11-t10/)
+
+---
+
+## 8. DSA Comparison
+
+### Timing method
+
+AI was used to confirm that `time.perf_counter()` is suitable for very short timings.
+
+**Source verified:** [Python docs: time.perf_counter](https://docs.python.org/3/library/time.html#time.perf_counter)
+
+---
+
+## 9. Testing
+
+AI was used to generate edge-case test inputs (wrong credentials, invalid ids, bad JSON, repeated deletes). The team ran each test with curl and recorded the results.
+
+**Result:** [write what happened, e.g. "bad JSON returned 500; fixed to return 400"]
+
+**Source verified:** [curl manual](https://curl.se/docs/manpage.html)
+
+---
+
+## 10. Verification of AI-Supplied Information
 
 AI responses were treated as supporting information rather than authoritative project decisions.
 
